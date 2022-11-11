@@ -403,6 +403,7 @@ impl MappableCommand {
         completion, "Invoke completion popup",
         hover, "Show docs for item under cursor",
         toggle_comments, "Comment/uncomment selections",
+        toggle_comment_blocks, "Comment/uncomment block comment",
         rotate_selections_forward, "Rotate selections forward",
         rotate_selections_backward, "Rotate selections backward",
         rotate_selection_contents_forward, "Rotate selection contents forward",
@@ -4542,6 +4543,19 @@ fn toggle_comments(cx: &mut Context) {
     let transaction = comment::toggle_line_comments(doc.text(), doc.selection(view.id), token);
 
     doc.apply(&transaction, view.id);
+    exit_select_mode(cx);
+}
+
+fn toggle_comment_blocks(cx: &mut Context) {
+    let (view, doc) = current!(cx.editor);
+    let tokens = doc
+        .language_config()
+        .and_then(|lc| lc.block_comment_tokens.as_ref())
+        .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
+    let transaction = comment::toggle_block_comments(doc.text(), doc.selection(view.id), tokens);
+    let selection = doc.selection(view.id).clone().map(transaction.changes());
+    apply_transaction(&transaction, doc, view);
+    doc.set_selection(view.id, selection);
     exit_select_mode(cx);
 }
 

@@ -103,6 +103,7 @@ pub struct LanguageConfiguration {
     pub shebangs: Vec<String>, // interpreter(s) associated with language
     pub roots: Vec<String>,        // these indicate project roots <.git, Cargo.toml>
     pub comment_token: Option<String>,
+    pub block_comment_tokens: Option<(String, String)>,
     pub text_width: Option<usize>,
     pub soft_wrap: Option<SoftWrap>,
 

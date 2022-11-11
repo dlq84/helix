@@ -2,7 +2,7 @@
 //! using the comment character defined in the user's `languages.toml`
 
 use crate::{
-    find_first_non_whitespace_char, Change, Rope, RopeSlice, Selection, Tendril, Transaction,
+    find_first_non_whitespace_char, Change, Range, Rope, RopeSlice, Selection, Tendril, Transaction,
 };
 use std::borrow::Cow;
 
@@ -91,6 +91,110 @@ pub fn toggle_line_comments(doc: &Rope, selection: &Selection, token: Option<&st
         }
     }
 
+    Transaction::change(doc, changes.into_iter())
+}
+
+fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
+    let len = text.chars().len();
+    for i in (0..len).rev() {
+        if !text.get_char(i)?.is_whitespace() {
+            return Some(i);
+        }
+    }
+    None
+}
+
+type ToChange = Vec<(Range, usize, usize, usize, usize)>;
+
+fn find_block_comments(
+    open: &str,
+    close: &str,
+    text: RopeSlice,
+    selection: &Selection,
+) -> (bool, ToChange) {
+    let mut commented = true;
+    let mut to_change: ToChange = Vec::with_capacity(selection.len());
+    for selection in selection {
+        let selection_slice = selection.slice(text);
+        if let (Some(open_pos), Some(close_pos)) = (
+            find_first_non_whitespace_char(selection_slice),
+            find_last_non_whitespace_char(selection_slice),
+        ) {
+            let len = selection_slice.len_chars();
+
+            // line can be shorter than open_pos + open len
+            let open_fragment = Cow::from(
+                selection_slice.slice(open_pos..std::cmp::min(open_pos + open.len(), len)),
+            );
+            let close_fragment = Cow::from(
+                selection_slice
+                    .slice(close_pos - std::cmp::min(close.len() - 1, close_pos)..close_pos + 1),
+            );
+            let open_margin = if matches!(selection_slice.get_char(open_pos + open.len()), Some(c) if c == ' ')
+            {
+                1
+            } else {
+                0
+            };
+            let close_margin = if matches!(selection_slice.get_char(close_pos - std::cmp::min(close.len(), close_pos)), Some(c) if c == ' ')
+            {
+                1
+            } else {
+                0
+            };
+            if !(open_fragment == open && close_fragment == close) {
+                // as soon as one of the selections doesn't have a comment, only uncommented selections
+                // should be changed.
+                if commented {
+                    to_change.clear();
+                }
+                to_change.push((*selection, open_pos, close_pos, open_margin, close_margin));
+                commented = false;
+            } else if commented {
+                to_change.push((*selection, open_pos, close_pos, open_margin, close_margin));
+            }
+        }
+    }
+    (commented, to_change)
+}
+
+#[must_use]
+pub fn toggle_block_comments(
+    doc: &Rope,
+    selection: &Selection,
+    tokens: Option<(&str, &str)>,
+) -> Transaction {
+    let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
+    let text = doc.slice(..);
+    let (commented, to_change) = find_block_comments(open_token, close_token, text, selection);
+    let open = Tendril::from(format!("{} ", open_token));
+    let close = Tendril::from(format!(" {}", close_token));
+    let mut changes: Vec<Change> = Vec::with_capacity(selection.len());
+    for (range, open_pos, close_pos, open_margin, close_margin) in to_change {
+        let from = range
+            .with_direction(crate::movement::Direction::Forward)
+            .from();
+        if commented {
+            changes.push((
+                from + open_pos,
+                from + open_pos + open_token.len() + open_margin,
+                None,
+            ));
+            changes.push((
+                from + close_pos - close_token.len() - close_margin + 1,
+                from + close_pos + 1,
+                None,
+            ));
+            log::error!("{} {}", open_margin, close_margin);
+        } else {
+            changes.push((from + open_pos, from + open_pos, Some(open.clone())));
+            changes.push((
+                from + close_pos + 1,
+                from + close_pos + 1,
+                Some(close.clone()),
+            ));
+        }
+    }
     Transaction::change(doc, changes.into_iter())
 }
 
