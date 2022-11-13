@@ -15,7 +15,7 @@ use std::borrow::Cow;
 ///     - Column of existing tokens, if the lines are commented; column to place tokens at otherwise.
 /// - The margin to the right of the comment tokens
 ///     - Defaults to `1`. If any existing comment token is not followed by a space, changes to `0`.
-pub fn find_line_comment(
+fn find_line_comment(
     token: &str,
     text: RopeSlice,
     lines: impl IntoIterator<Item = usize>,
@@ -105,8 +105,14 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
 }
 
 type ToChange = Vec<(Range, usize, usize, usize, usize)>;
-
-pub fn find_block_comments(
+/// Return if all selections are block commented and which selections to toggle comments on
+///
+/// ToChange is a Vec of tuples representing where comments need to be either inserted or removed
+/// the first item in each tuple is a Range the second and third item are the positions of the first and last
+/// non whitespace char which is either the position of the open and close comment tokens if commented or the position
+/// of the start and end of the text where comment tokens should be inserted. The fourth and fifth item are the margin
+/// between the tokens and the text 1 if there is a space 0 if there is no space
+fn find_block_comments(
     open: &str,
     close: &str,
     text: RopeSlice,
@@ -122,7 +128,7 @@ pub fn find_block_comments(
         ) {
             let len = selection_slice.len_chars();
 
-            // line can be shorter than open_pos + open len
+            // selection can be shorter than open_pos + open len
             let open_fragment = Cow::from(
                 selection_slice.slice(open_pos..std::cmp::min(open_pos + open.len(), len)),
             );
@@ -130,6 +136,8 @@ pub fn find_block_comments(
                 selection_slice
                     .slice(close_pos - std::cmp::min(close.len() - 1, close_pos)..close_pos + 1),
             );
+
+            // margin of one if there is a space between the comment token and other characters
             let open_margin = if matches!(selection_slice.get_char(open_pos + open.len()), Some(c) if c == ' ')
             {
                 1
@@ -142,6 +150,7 @@ pub fn find_block_comments(
             } else {
                 0
             };
+
             if !(open_fragment == open && close_fragment == close) {
                 // as soon as one of the selections doesn't have a comment, only uncommented selections
                 // should be changed.
@@ -185,7 +194,6 @@ pub fn toggle_block_comments(
                 from + close_pos + 1,
                 None,
             ));
-            log::error!("{} {}", open_margin, close_margin);
         } else {
             changes.push((from + open_pos, from + open_pos, Some(open.clone())));
             changes.push((
@@ -196,6 +204,53 @@ pub fn toggle_block_comments(
         }
     }
     Transaction::change(doc, changes.into_iter())
+}
+
+/// Return if the selections should be block or line comment toggled
+pub fn comment_type(
+    token: Option<&str>,
+    tokens: Option<(&str, &str)>,
+    text: RopeSlice,
+    selection: &Selection,
+) -> bool {
+    let mut lines: Vec<usize> = Vec::with_capacity(selection.len());
+    let mut min_next_line = 0;
+    for selection in selection {
+        let (start, end) = selection.line_range(text);
+        let start = start.max(min_next_line).min(text.len_lines());
+        let end = (end + 1).min(text.len_lines());
+
+        lines.extend(start..end);
+        min_next_line = end;
+    }
+
+    let (line_commented, _, _, _) = find_line_comment(token.unwrap_or("//"), text, lines);
+    let comment_tokens = tokens.unwrap_or(("/*", "*/"));
+    let (block_commented, _) =
+        find_block_comments(comment_tokens.0, comment_tokens.1, text, selection);
+
+    // line comment when only line comment token available
+    if matches!(token, Some(_)) && !matches!(tokens, Some(_)) {
+        return true;
+        // block comment when only block comment tokens available
+    }
+    if !matches!(token, Some(_)) && matches!(tokens, Some(_)) {
+        return false;
+    }
+
+    if line_commented {
+        return true;
+    }
+    if block_commented {
+        return false;
+    }
+
+    let ranges = selection.ranges().iter().map(|range| {
+        let range = range.with_direction(crate::movement::Direction::Forward);
+        range.line_range(text).1 - range.line_range(text).0
+    });
+    // line comment if all ranges are one line long
+    ranges.max() == Some(0)
 }
 
 #[cfg(test)]

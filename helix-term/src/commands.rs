@@ -4537,8 +4537,6 @@ pub fn completion(cx: &mut Context) {
 // comments
 fn toggle_comments(cx: &mut Context) {
     let (view, doc) = current!(cx.editor);
-    let line_comment;
-
     let token: Option<&str> = doc
         .language_config()
         .and_then(|lc| lc.comment_token.as_ref())
@@ -4548,50 +4546,8 @@ fn toggle_comments(cx: &mut Context) {
         .and_then(|lc| lc.block_comment_tokens.as_ref())
         .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
 
-    let text = doc.text().slice(..);
-    let selection = doc.selection(view.id);
-    let mut lines: Vec<usize> = Vec::with_capacity(selection.len());
-
-    let mut min_next_line = 0;
-    for selection in selection {
-        let (start, end) = selection.line_range(text);
-        let start = start.max(min_next_line).min(text.len_lines());
-        let end = (end + 1).min(text.len_lines());
-
-        lines.extend(start..end);
-        min_next_line = end;
-    }
-
-    let (line_commented, _, _, _) = comment::find_line_comment(token.unwrap_or("//"), text, lines);
-    let comment_tokens = tokens.unwrap_or(("/*", "*/"));
-    let (block_commented, _) = comment::find_block_comments(
-        comment_tokens.0,
-        comment_tokens.1,
-        doc.text().slice(..),
-        doc.selection(view.id),
-    );
-    // line comment when only line comment token available
-    if matches!(token, Some(_)) && !matches!(tokens, Some(_)) {
-        line_comment = true;
-    // block comment when only block comment tokens available
-    } else if !matches!(token, Some(_)) && matches!(tokens, Some(_)) {
-        line_comment = false;
-    } else if line_commented {
-        line_comment = true;
-    } else if block_commented {
-        line_comment = false;
-    } else {
-        let ranges = doc.selection(view.id).ranges().iter().map(|range| {
-            let range = range.with_direction(Direction::Forward);
-            range.line_range(text).1 - range.line_range(text).0
-        });
-        // line comment if all ranges are one line long
-        if ranges.max() == Some(0) {
-            line_comment = true;
-        } else {
-            line_comment = false;
-        }
-    }
+    let line_comment =
+        comment::comment_type(token, tokens, doc.text().slice(..), doc.selection(view.id));
     let transaction = if line_comment {
         comment::toggle_line_comments(doc.text(), doc.selection(view.id), token)
     } else {
