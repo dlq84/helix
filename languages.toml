@@ -638,6 +638,7 @@ scope = "text.html.basic"
 injection-regex = "html"
 file-types = ["html"]
 roots = []
+block-comment-tokens = ["<!--", "-->"]
 language-servers = [ "vscode-html-language-server" ]
 auto-format = true
 indent = { tab-width = 2, unit = "  " }

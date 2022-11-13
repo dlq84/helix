@@ -15,7 +15,7 @@ use std::borrow::Cow;
 ///     - Column of existing tokens, if the lines are commented; column to place tokens at otherwise.
 /// - The margin to the right of the comment tokens
 ///     - Defaults to `1`. If any existing comment token is not followed by a space, changes to `0`.
-fn find_line_comment(
+pub fn find_line_comment(
     token: &str,
     text: RopeSlice,
     lines: impl IntoIterator<Item = usize>,
@@ -106,7 +106,7 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
 
 type ToChange = Vec<(Range, usize, usize, usize, usize)>;
 
-fn find_block_comments(
+pub fn find_block_comments(
     open: &str,
     close: &str,
     text: RopeSlice,
