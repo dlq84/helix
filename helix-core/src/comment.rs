@@ -164,7 +164,7 @@ fn find_block_comments(
             }
         }
     }
-    if to_change.len() == 0 {
+    if to_change.is_empty() {
         commented = false;
     }
     (commented, to_change)
