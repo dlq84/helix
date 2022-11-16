@@ -164,6 +164,9 @@ fn find_block_comments(
             }
         }
     }
+    if to_change.len() == 0 {
+        commented = false;
+    }
     (commented, to_change)
 }
 
