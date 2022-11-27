@@ -209,13 +209,35 @@ pub fn toggle_block_comments(
     Transaction::change(doc, changes.into_iter())
 }
 
-/// Return if the selections should be block or line comment toggled
+pub enum CommentType {
+    Line,
+    Block,
+    BlockAsLineFallback,
+}
+
+/// Return what CommentType selection should be toggled with
 pub fn comment_type(
     token: Option<&str>,
     tokens: Option<(&str, &str)>,
     text: RopeSlice,
     selection: &Selection,
-) -> bool {
+) -> CommentType {
+    let max_line_length = selection
+        .ranges()
+        .iter()
+        .map(|range| {
+            let range = range.with_direction(crate::movement::Direction::Forward);
+            range.line_range(text).1 - range.line_range(text).0 + 1
+        })
+        .max();
+
+    let (token, tokens) = match (token, tokens, max_line_length) {
+        (Some(token), Some(tokens), _) => (token, tokens),
+        (None, None, _) => ("//", ("/*", "*/")),
+        (Some(_), None, _) => return CommentType::Line,
+        (None, Some(_), Some(1)) => return CommentType::BlockAsLineFallback,
+        (None, Some(_), _) => return CommentType::Block,
+    };
     let mut lines: Vec<usize> = Vec::with_capacity(selection.len());
     let mut min_next_line = 0;
     for selection in selection {
@@ -227,33 +249,21 @@ pub fn comment_type(
         min_next_line = end;
     }
 
-    let (line_commented, _, _, _) = find_line_comment(token.unwrap_or("//"), text, lines);
-    let comment_tokens = tokens.unwrap_or(("/*", "*/"));
-    let (block_commented, _) =
-        find_block_comments(comment_tokens.0, comment_tokens.1, text, selection);
-
-    // line comment when only line comment token available
-    if matches!(token, Some(_)) && !matches!(tokens, Some(_)) {
-        return true;
-        // block comment when only block comment tokens available
-    }
-    if !matches!(token, Some(_)) && matches!(tokens, Some(_)) {
-        return false;
-    }
+    let (line_commented, _, _, _) = find_line_comment(token, text, lines);
+    let (block_commented, _) = find_block_comments(tokens.0, tokens.1, text, selection);
 
     if line_commented {
-        return true;
+        return CommentType::Line;
     }
     if block_commented {
-        return false;
+        return CommentType::Block;
     }
 
-    let ranges = selection.ranges().iter().map(|range| {
-        let range = range.with_direction(crate::movement::Direction::Forward);
-        range.line_range(text).1 - range.line_range(text).0
-    });
     // line comment if all ranges are one line long
-    ranges.max() == Some(0)
+    match max_line_length {
+        Some(1) => CommentType::Line,
+        _ => CommentType::Block,
+    }
 }
 
 #[cfg(test)]
