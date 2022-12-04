@@ -338,4 +338,30 @@ mod test {
 
         // TODO: account for uncommenting with uneven comment indentation
     }
+
+    #[test]
+    fn test_find_block_comments() {
+        // three lines 5 characters.
+        let mut doc = Rope::from("1\n2\n3");
+        // select whole document
+        let selection = Selection::single(0, doc.len_chars());
+
+        let text = doc.slice(..);
+
+        let res = find_block_comments("/*", "*/", text, &selection);
+
+        assert_eq!(res, (false, vec![(Range::new(0, 5), 0, 4, 0, 0)]));
+
+        // comment
+        let transaction = toggle_block_comments(&doc, &selection, None);
+        transaction.apply(&mut doc);
+
+        assert_eq!(doc, "/* 1\n2\n3 */");
+
+        // uncomment
+        let selection = Selection::single(0, doc.len_chars());
+        let transaction = toggle_block_comments(&doc, &selection, None);
+        transaction.apply(&mut doc);
+        assert_eq!(doc, "1\n2\n3");
+    }
 }
