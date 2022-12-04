@@ -138,18 +138,16 @@ fn find_block_comments(
             );
 
             // margin of one if there is a space between the comment token and other characters
-            let open_margin = if matches!(selection_slice.get_char(open_pos + open.len()), Some(c) if c == ' ')
-            {
-                1
-            } else {
-                0
+            let open_margin = match selection_slice.get_char(open_pos + open.len()) {
+                Some(c) if c == ' ' => 1,
+                _ => 0,
             };
-            let close_margin = if matches!(selection_slice.get_char(close_pos - std::cmp::min(close.len(), close_pos)), Some(c) if c == ' ')
-            {
-                1
-            } else {
-                0
-            };
+
+            let close_margin =
+                match selection_slice.get_char(close_pos - std::cmp::min(close.len(), close_pos)) {
+                    Some(c) if c == ' ' => 1,
+                    _ => 0,
+                };
 
             if !(open_fragment == open && close_fragment == close) {
                 // as soon as one of the selections doesn't have a comment, only uncommented selections
