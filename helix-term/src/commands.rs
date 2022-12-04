@@ -4555,19 +4555,13 @@ fn toggle_comments(cx: &mut Context) {
         comment::CommentType::Block => {
             comment::toggle_block_comments(doc.text(), doc.selection(view.id), tokens)
         }
-        comment::CommentType::BlockAsLineFallback => comment::toggle_block_comments(
-            doc.text(),
-            &doc.selection(view.id).clone().transform(|range| {
-                let text = doc.text();
-
-                let (start_line, end_line) = range.line_range(text.slice(..));
-                let start = text.line_to_char(start_line);
-                let end = text.line_to_char((end_line + 1).min(text.len_lines()));
-
-                Range::new(start, end).with_direction(range.direction())
-            }),
-            tokens,
-        ),
+        comment::CommentType::BlockAsLineFallback => {
+            comment::toggle_block_comments_as_line_fallback(
+                doc.text(),
+                doc.selection(view.id),
+                tokens,
+            )
+        }
     };
 
     apply_transaction(&transaction, doc, view);

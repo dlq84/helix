@@ -209,6 +209,25 @@ pub fn toggle_block_comments(
     Transaction::change(doc, changes.into_iter())
 }
 
+pub fn toggle_block_comments_as_line_fallback(
+    text: &Rope,
+    selection: &Selection,
+    tokens: Option<(&str, &str)>,
+) -> Transaction {
+    toggle_block_comments(
+        text,
+        &selection.clone().transform(|range| {
+            // extend each line
+            let (start_line, end_line) = range.line_range(text.slice(..));
+            let start = text.line_to_char(start_line);
+            let end = text.line_to_char((end_line + 1).min(text.len_lines()));
+
+            Range::new(start, end).with_direction(range.direction())
+        }),
+        tokens,
+    )
+}
+
 pub enum CommentType {
     Line,
     Block,
