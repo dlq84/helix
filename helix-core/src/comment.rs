@@ -1,8 +1,12 @@
 //! This module contains the functionality toggle comments on lines over the selection
 //! using the comment character defined in the user's `languages.toml`
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::{
-    find_first_non_whitespace_char, Change, Range, Rope, RopeSlice, Selection, Tendril, Transaction,
+    find_first_non_whitespace_char, selection, Change, Range, Rope, RopeSlice, Selection, Tendril,
+    Transaction,
 };
 use std::borrow::Cow;
 
@@ -212,16 +216,23 @@ pub fn toggle_block_comments_as_line_fallback(
     selection: &Selection,
     tokens: Option<(&str, &str)>,
 ) -> Transaction {
+    #[allow(clippy::trivial_regex)]
+    static REGEX: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"\r\n|[\n\r\u{000B}\u{000C}\u{0085}\u{2028}\u{2029}]").unwrap());
     toggle_block_comments(
         text,
-        &selection.clone().transform(|range| {
-            // extend each line
-            let (start_line, end_line) = range.line_range(text.slice(..));
-            let start = text.line_to_char(start_line);
-            let end = text.line_to_char((end_line + 1).min(text.len_lines()));
+        &selection::split_on_matches(
+            text.slice(..),
+            &selection.clone().transform(|range| {
+                // extend each line
+                let (start_line, end_line) = range.line_range(text.slice(..));
+                let start = text.line_to_char(start_line);
+                let end = text.line_to_char((end_line + 1).min(text.len_lines()));
 
-            Range::new(start, end).with_direction(range.direction())
-        }),
+                Range::new(start, end).with_direction(range.direction())
+            }),
+            &REGEX,
+        ),
         tokens,
     )
 }
@@ -239,22 +250,6 @@ pub fn comment_type(
     text: RopeSlice,
     selection: &Selection,
 ) -> CommentType {
-    let max_line_length = selection
-        .ranges()
-        .iter()
-        .map(|range| {
-            let range = range.with_direction(crate::movement::Direction::Forward);
-            range.line_range(text).1 - range.line_range(text).0 + 1
-        })
-        .max();
-
-    let (token, tokens) = match (token, tokens, max_line_length) {
-        (Some(token), Some(tokens), _) => (token, tokens),
-        (None, None, _) => ("//", ("/*", "*/")),
-        (Some(_), None, _) => return CommentType::Line,
-        (None, Some(_), Some(1)) => return CommentType::BlockAsLineFallback,
-        (None, Some(_), _) => return CommentType::Block,
-    };
     let mut lines: Vec<usize> = Vec::with_capacity(selection.len());
     let mut min_next_line = 0;
     for selection in selection {
@@ -265,9 +260,21 @@ pub fn comment_type(
         lines.extend(start..end);
         min_next_line = end;
     }
-
-    let (line_commented, _, _, _) = find_line_comment(token, text, lines);
-    let (block_commented, _) = find_block_comments(tokens.0, tokens.1, text, selection);
+    let (line_commented, block_commented) = match (token, tokens) {
+        (Some(token), Some(tokens)) => (
+            find_line_comment(token, text, lines).0,
+            find_block_comments(tokens.0, tokens.1, text, selection).0,
+        ),
+        (None, None) => (
+            find_line_comment("//", text, lines).0,
+            find_block_comments("/*", "*/", text, selection).0,
+        ),
+        (Some(_), None) => return CommentType::Line,
+        (None, Some(tokens)) => (
+            false,
+            find_block_comments(tokens.0, tokens.1, text, selection).0,
+        ),
+    };
 
     if line_commented {
         return CommentType::Line;
@@ -275,11 +282,9 @@ pub fn comment_type(
     if block_commented {
         return CommentType::Block;
     }
-
-    // line comment if all ranges are one line long
-    match max_line_length {
-        Some(1) => CommentType::Line,
-        _ => CommentType::Block,
+    match (token, tokens) {
+        (None, Some(_)) => CommentType::BlockAsLineFallback,
+        _ => CommentType::Line,
     }
 }
 
