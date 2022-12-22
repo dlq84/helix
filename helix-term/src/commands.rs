@@ -4535,15 +4535,14 @@ pub fn completion(cx: &mut Context) {
 }
 
 // comments
-fn toggle_comments_impl(
-    cx: &mut Context,
-    comment_type: fn(
-        token: Option<&str>,
-        tokens: Option<(&str, &str)>,
-        text: RopeSlice,
-        selection: &Selection,
-    ) -> comment::CommentType,
-) {
+type CommentTypeFn = fn(
+    token: Option<&str>,
+    tokens: Option<(&str, &str)>,
+    text: RopeSlice,
+    selection: &Selection,
+) -> comment::CommentType;
+
+fn toggle_comments_impl(cx: &mut Context, comment_type: CommentTypeFn) {
     let (view, doc) = current!(cx.editor);
     let token: Option<&str> = doc
         .language_config()
