@@ -4535,7 +4535,15 @@ pub fn completion(cx: &mut Context) {
 }
 
 // comments
-fn toggle_comments(cx: &mut Context) {
+fn toggle_comments_impl(
+    cx: &mut Context,
+    comment_type: fn(
+        token: Option<&str>,
+        tokens: Option<(&str, &str)>,
+        text: RopeSlice,
+        selection: &Selection,
+    ) -> comment::CommentType,
+) {
     let (view, doc) = current!(cx.editor);
     let token: Option<&str> = doc
         .language_config()
@@ -4546,8 +4554,7 @@ fn toggle_comments(cx: &mut Context) {
         .and_then(|lc| lc.block_comment_tokens.as_ref())
         .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
 
-    let comment_type =
-        comment::comment_type(token, tokens, doc.text().slice(..), doc.selection(view.id));
+    let comment_type = comment_type(token, tokens, doc.text().slice(..), doc.selection(view.id));
     let transaction = match comment_type {
         comment::CommentType::Line => {
             comment::toggle_line_comments(doc.text(), doc.selection(view.id), token)
@@ -4564,32 +4571,26 @@ fn toggle_comments(cx: &mut Context) {
         }
     };
 
-    apply_transaction(&transaction, doc, view);
-    exit_select_mode(cx);
-}
-
-fn toggle_line_comments(cx: &mut Context) {
-    let (view, doc) = current!(cx.editor);
-    let token = doc
-        .language_config()
-        .and_then(|lc| lc.comment_token.as_ref())
-        .map(|tc| tc.as_ref());
-    let transaction = comment::toggle_line_comments(doc.text(), doc.selection(view.id), token);
-
     doc.apply(&transaction, view.id);
     exit_select_mode(cx);
 }
 
-fn toggle_block_comments(cx: &mut Context) {
-    let (view, doc) = current!(cx.editor);
-    let tokens = doc
-        .language_config()
-        .and_then(|lc| lc.block_comment_tokens.as_ref())
-        .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
-    let transaction = comment::toggle_block_comments(doc.text(), doc.selection(view.id), tokens);
+fn toggle_comments(cx: &mut Context) {
+    toggle_comments_impl(cx, comment::comment_type)
+}
 
-    apply_transaction(&transaction, doc, view);
-    exit_select_mode(cx);
+fn toggle_line_comments(cx: &mut Context) {
+    toggle_comments_impl(cx, |token, tokens, _, _| match (token, tokens) {
+        (None, Some(_)) => comment::CommentType::BlockAsLineFallback,
+        _ => comment::CommentType::Line,
+    });
+}
+
+fn toggle_block_comments(cx: &mut Context) {
+    toggle_comments_impl(cx, |token, tokens, _, _| match (token, tokens) {
+        (Some(_), None) => comment::CommentType::Line,
+        _ => comment::CommentType::Block,
+    });
 }
 
 fn rotate_selections(cx: &mut Context, direction: Direction) {

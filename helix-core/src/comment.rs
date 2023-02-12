@@ -211,28 +211,33 @@ pub fn toggle_block_comments(
     Transaction::change(doc, changes.into_iter())
 }
 
+pub fn split_lines_of_selection(text: RopeSlice, selection: &Selection) -> Selection {
+    #[allow(clippy::trivial_regex)]
+    static REGEX: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r"\r\n|[\n\r\u{000B}\u{000C}\u{0085}\u{2028}\u{2029}]").unwrap());
+
+    selection::split_on_matches(
+        text,
+        &selection.clone().transform(|range| {
+            // extend each line
+            let (start_line, end_line) = range.line_range(text.slice(..));
+            let start = text.line_to_char(start_line);
+            let end = text.line_to_char((end_line + 1).min(text.len_lines()));
+
+            Range::new(start, end).with_direction(range.direction())
+        }),
+        &REGEX,
+    )
+}
+
 pub fn toggle_block_comments_as_line_fallback(
     text: &Rope,
     selection: &Selection,
     tokens: Option<(&str, &str)>,
 ) -> Transaction {
-    #[allow(clippy::trivial_regex)]
-    static REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"\r\n|[\n\r\u{000B}\u{000C}\u{0085}\u{2028}\u{2029}]").unwrap());
     toggle_block_comments(
         text,
-        &selection::split_on_matches(
-            text.slice(..),
-            &selection.clone().transform(|range| {
-                // extend each line
-                let (start_line, end_line) = range.line_range(text.slice(..));
-                let start = text.line_to_char(start_line);
-                let end = text.line_to_char((end_line + 1).min(text.len_lines()));
-
-                Range::new(start, end).with_direction(range.direction())
-            }),
-            &REGEX,
-        ),
+        &split_lines_of_selection(text.slice(..), selection),
         tokens,
     )
 }
@@ -260,24 +265,25 @@ pub fn comment_type(
         lines.extend(start..end);
         min_next_line = end;
     }
+    let split_lines = split_lines_of_selection(text, selection);
     let (line_commented, block_commented) = match (token, tokens) {
-        (Some(token), Some(tokens)) => (
-            find_line_comment(token, text, lines).0,
+        (Some(_), Some(tokens)) => (
+            find_block_comments(tokens.0, tokens.1, text, &split_lines).0,
             find_block_comments(tokens.0, tokens.1, text, selection).0,
         ),
         (None, None) => (
-            find_line_comment("//", text, lines).0,
+            find_block_comments("/*", "*/", text, &split_lines).0,
             find_block_comments("/*", "*/", text, selection).0,
         ),
         (Some(_), None) => return CommentType::Line,
         (None, Some(tokens)) => (
-            false,
+            find_block_comments(tokens.0, tokens.1, text, &split_lines).0,
             find_block_comments(tokens.0, tokens.1, text, selection).0,
         ),
     };
 
     if line_commented {
-        return CommentType::Line;
+        return CommentType::BlockAsLineFallback;
     }
     if block_commented {
         return CommentType::Block;
