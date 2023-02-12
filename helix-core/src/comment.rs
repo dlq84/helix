@@ -108,24 +108,25 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
     None
 }
 
-type ToChange = Vec<(Range, usize, usize, usize, usize)>;
-/// Return if all selections are block commented and which selections to toggle comments on
-///
-/// ToChange is a Vec of tuples representing where comments need to be either inserted or removed
-/// the first item in each tuple is a Range the second and third item are the positions of the first and last
-/// non whitespace char which is either the position of the open and close comment tokens if commented or the position
-/// of the start and end of the text where comment tokens should be inserted. The fourth and fifth item are the margin
-/// between the tokens and the text 1 if there is a space 0 if there is no space
+#[derive(Debug, PartialEq)]
+struct CommentChange {
+    range: Range,
+    open_pos: usize,
+    close_pos: usize,
+    open_margin: usize,
+    close_margin: usize,
+}
+
 fn find_block_comments(
     open: &str,
     close: &str,
     text: RopeSlice,
     selection: &Selection,
-) -> (bool, ToChange) {
+) -> (bool, Vec<CommentChange>) {
     let mut commented = true;
-    let mut to_change: ToChange = Vec::with_capacity(selection.len());
-    for selection in selection {
-        let selection_slice = selection.slice(text);
+    let mut comment_changes = Vec::with_capacity(selection.len());
+    for range in selection {
+        let selection_slice = range.slice(text);
         if let (Some(open_pos), Some(close_pos)) = (
             find_first_non_whitespace_char(selection_slice),
             find_last_non_whitespace_char(selection_slice),
@@ -147,29 +148,46 @@ fn find_block_comments(
                 _ => 0,
             };
 
-            let close_margin =
+            let close_margin = if open_pos + open.len()
+                != close_pos - std::cmp::min(close.len(), close_pos)
+            {
                 match selection_slice.get_char(close_pos - std::cmp::min(close.len(), close_pos)) {
                     Some(c) if c == ' ' => 1,
                     _ => 0,
-                };
+                }
+            } else {
+                0
+            };
 
             if !(open_fragment == open && close_fragment == close) {
                 // as soon as one of the selections doesn't have a comment, only uncommented selections
                 // should be changed.
                 if commented {
-                    to_change.clear();
+                    comment_changes.clear();
                 }
-                to_change.push((*selection, open_pos, close_pos, open_margin, close_margin));
+                comment_changes.push(CommentChange {
+                    range: *range,
+                    open_pos,
+                    close_pos,
+                    open_margin,
+                    close_margin,
+                });
                 commented = false;
             } else if commented {
-                to_change.push((*selection, open_pos, close_pos, open_margin, close_margin));
+                comment_changes.push(CommentChange {
+                    range: *range,
+                    open_pos,
+                    close_pos,
+                    open_margin,
+                    close_margin,
+                });
             }
         }
     }
-    if to_change.is_empty() {
+    if comment_changes.is_empty() {
         commented = false;
     }
-    (commented, to_change)
+    (commented, comment_changes)
 }
 
 #[must_use]
@@ -180,11 +198,19 @@ pub fn toggle_block_comments(
 ) -> Transaction {
     let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
     let text = doc.slice(..);
-    let (commented, to_change) = find_block_comments(open_token, close_token, text, selection);
+    let (commented, comment_changes) =
+        find_block_comments(open_token, close_token, text, selection);
     let open = Tendril::from(format!("{} ", open_token));
     let close = Tendril::from(format!(" {}", close_token));
     let mut changes: Vec<Change> = Vec::with_capacity(selection.len());
-    for (range, open_pos, close_pos, open_margin, close_margin) in to_change {
+    for CommentChange {
+        range,
+        open_pos,
+        close_pos,
+        open_margin,
+        close_margin,
+    } in comment_changes
+    {
         let from = range
             .with_direction(crate::movement::Direction::Forward)
             .from();
@@ -361,7 +387,19 @@ mod test {
 
         let res = find_block_comments("/*", "*/", text, &selection);
 
-        assert_eq!(res, (false, vec![(Range::new(0, 5), 0, 4, 0, 0)]));
+        assert_eq!(
+            res,
+            (
+                false,
+                vec![CommentChange {
+                    range: Range::new(0, 5),
+                    open_pos: 0,
+                    close_pos: 4,
+                    open_margin: 0,
+                    close_margin: 0
+                }]
+            )
+        );
 
         // comment
         let transaction = toggle_block_comments(&doc, &selection, None);
@@ -374,5 +412,12 @@ mod test {
         let transaction = toggle_block_comments(&doc, &selection, None);
         transaction.apply(&mut doc);
         assert_eq!(doc, "1\n2\n3");
+
+        // don't panic when there is just a space in comment
+        doc = Rope::from("/* */");
+        let selection = Selection::single(0, doc.len_chars());
+        let transaction = toggle_block_comments(&doc, &selection, None);
+        transaction.apply(&mut doc);
+        assert_eq!(doc, "");
     }
 }
