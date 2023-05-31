@@ -99,13 +99,11 @@ pub fn toggle_line_comments(doc: &Rope, selection: &Selection, token: Option<&st
 }
 
 fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
-    let len = text.chars().len();
-    for i in (0..len).rev() {
-        if !text.get_char(i)?.is_whitespace() {
-            return Some(i);
-        }
-    }
-    None
+    (0..text.len_chars()).rev().find(|&i| {
+        text.get_char(i)
+            .map(|ch| !ch.is_whitespace())
+            .unwrap_or(false)
+    })
 }
 
 #[derive(Debug, PartialEq)]
