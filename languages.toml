@@ -2359,6 +2359,7 @@ file-types = ["bicep"]
 roots = []
 auto-format = true
 comment-token = "//"
+block-comment-tokens = ["/*", "*/"]
 indent = { tab-width = 2, unit = " "}
 language-servers = [ "bicep-langserver" ]
 
@@ -2372,6 +2373,8 @@ scope = "source.qml"
 file-types = ["qml"]
 roots = []
 language-servers = [ "qmlls" ]
+comment-token = "//"
+block-comment-tokens = ["/*", "*/"]
 indent = { tab-width = 4, unit = "    " }
 grammar = "qmljs"
 
@@ -2413,6 +2416,7 @@ injection-regex = "pony"
 roots = ["corral.json", "lock.json"]
 indent = { tab-width = 2, unit = "  " }
 comment-token = "//"
+block-comment-tokens = ["/*", "*/"]
 
 [[grammar]]
 name = "ponylang"
@@ -2425,6 +2429,7 @@ injection-regex = "dhall"
 file-types = ["dhall"]
 roots = []
 comment-token = "--"
+block-comment-tokens = ["{-", "-}"]
 indent = { tab-width = 2, unit = "  " }
 language-servers = [ "dhall-lsp-server" ]
 formatter = { command = "dhall" , args = ["format"] }
@@ -2450,6 +2455,7 @@ injection-regex = "msbuild"
 file-types = ["proj", "vbproj", "csproj", "fsproj", "targets", "props"]
 indent = { tab-width = 2, unit = "  " }
 roots = []
+block-comment-tokens = ["<!--", "-->"]
 grammar = "xml"
 
 [language.auto-pairs]
@@ -2500,7 +2506,7 @@ injection-regex = "tal"
 file-types = ["tal"]
 roots = []
 auto-format = false
-comment-token = "("
+block-comment-tokens = ["(", ")"]
 
 [[grammar]]
 name = "uxntal"
@@ -2631,6 +2637,7 @@ file-types = ["nim", "nims", "nimble"]
 shebangs = []
 roots = []
 comment-token = "#"
+block-comment-tokens = ["#[", "]#"]
 indent = { tab-width = 2, unit = "  " }
 language-servers = [ "nimlangserver" ]
 
@@ -2671,6 +2678,7 @@ source = { git = "https://github.com/pfeiferj/tree-sitter-hurl", rev = "264c4206
 name = "markdoc"
 scope = "text.markdoc"
 roots = []
+block-comment-tokens = ["<!--", "-->"]
 file-types = ["mdoc"]
 language-servers = [ "markdoc-ls" ]
 
@@ -2711,6 +2719,7 @@ injection-regex = "blueprint"
 file-types = ["blp"]
 roots = []
 comment-token = "//"
+block-comment-tokens = ["/*", "*/"]
 language-servers = [ "blueprint-compiler" ]
 indent = { tab-width = 4, unit = "    " }
 
@@ -2766,5 +2775,6 @@ scope = "text.html.webc"
 injection-regex = "webc"
 file-types = ["webc"]
 roots = []
+block-comment-tokens = ["<!--", "-->"]
 indent = { tab-width = 2, unit = "  " }
 grammar = "html"
