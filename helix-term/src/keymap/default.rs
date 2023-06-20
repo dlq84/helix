@@ -275,6 +275,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
             "r" => rename_symbol,
             "h" => select_references_to_symbol_under_cursor,
             "c" => { "Toggle comments"
+                "c" => toggle_comments,
                 "l" => toggle_line_comments,
                 "b" => toggle_block_comments,
             },

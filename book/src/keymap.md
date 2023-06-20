@@ -289,6 +289,7 @@ This layer is a kludge of mappings, mostly pickers.
 | `h`     | Select symbol references (**LSP**)                                      | `select_references_to_symbol_under_cursor` |
 | `'`     | Open last fuzzy picker                                                  | `last_picker`                              |
 | `w`     | Enter [window mode](#window-mode)                                       | N/A                                        |
+| `w`     | Enter [comment mode](#comment)                                          | N/A                                        |
 | `p`     | Paste system clipboard after selections                                 | `paste_clipboard_after`                    |
 | `P`     | Paste system clipboard before selections                                | `paste_clipboard_before`                   |
 | `y`     | Join and yank selections to clipboard                                   | `yank_joined_to_clipboard`                 |
@@ -298,6 +299,16 @@ This layer is a kludge of mappings, mostly pickers.
 | `?`     | Open command palette                                                    | `command_palette`                          |
 
 > 💡 Global search displays results in a fuzzy picker, use `Space + '` to bring it back up after opening a file.
+
+##### Comment
+
+Displays documentation for item under cursor.
+
+| Key     | Description                          | Command               |
+| -----   | -----------                          | -------               |
+| `c`     | "Comment/uncomment selections"       | toggle_comments       |
+| `l`     | "Line comment/uncomment selections"  | toggle_line_comments  |
+| `b`     | "Block comment/uncomment selections" | toggle_block_comments |
 
 ##### Popup
 
