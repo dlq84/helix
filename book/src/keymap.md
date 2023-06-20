@@ -12,6 +12,7 @@
     - [Match mode](#match-mode)
     - [Window mode](#window-mode)
     - [Space mode](#space-mode)
+      - [Comment mode](#comment-mode)
       - [Popup](#popup)
     - [Unimpaired](#unimpaired)
 - [Insert mode](#insert-mode)
@@ -289,7 +290,7 @@ This layer is a kludge of mappings, mostly pickers.
 | `h`     | Select symbol references (**LSP**)                                      | `select_references_to_symbol_under_cursor` |
 | `'`     | Open last fuzzy picker                                                  | `last_picker`                              |
 | `w`     | Enter [window mode](#window-mode)                                       | N/A                                        |
-| `w`     | Enter [comment mode](#comment)                                          | N/A                                        |
+| `w`     | Enter [comment mode](#comment-mode                                      | N/A                                        |
 | `p`     | Paste system clipboard after selections                                 | `paste_clipboard_after`                    |
 | `P`     | Paste system clipboard before selections                                | `paste_clipboard_before`                   |
 | `y`     | Join and yank selections to clipboard                                   | `yank_joined_to_clipboard`                 |
@@ -300,9 +301,9 @@ This layer is a kludge of mappings, mostly pickers.
 
 > 💡 Global search displays results in a fuzzy picker, use `Space + '` to bring it back up after opening a file.
 
-##### Comment
+##### Comment mode
 
-Displays documentation for item under cursor.
+Comment out code.
 
 | Key     | Description                          | Command               |
 | -----   | -----------                          | -------               |
