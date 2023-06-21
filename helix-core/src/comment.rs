@@ -126,14 +126,14 @@ fn find_block_comments(
             find_first_non_whitespace_char(selection_slice),
             find_last_non_whitespace_char(selection_slice),
         ) {
-            let len = selection_slice.len_chars();
+            let len = (close_pos + 1) - open_pos;
             let open_len = open.chars().count();
             let close_len = close.chars().count();
             let after_open = open_pos + open_len;
             let before_close = close_pos.saturating_sub(close_len);
 
-            let line_commented = if len >= after_open {
-                let open_fragment = selection_slice.slice(open_pos..open_pos + open_len);
+            let line_commented = if len >= open_len + close_len {
+                let open_fragment = selection_slice.slice(open_pos..after_open);
                 let close_fragment = selection_slice.slice(before_close + 1..close_pos + 1);
 
                 open_fragment == open && close_fragment == close
