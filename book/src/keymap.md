@@ -290,7 +290,7 @@ This layer is a kludge of mappings, mostly pickers.
 | `h`     | Select symbol references (**LSP**)                                      | `select_references_to_symbol_under_cursor` |
 | `'`     | Open last fuzzy picker                                                  | `last_picker`                              |
 | `w`     | Enter [window mode](#window-mode)                                       | N/A                                        |
-| `w`     | Enter [comment mode](#comment-mode                                      | N/A                                        |
+| `c`     | Enter [comment mode](#comment-mode)                                     | N/A                                        |
 | `p`     | Paste system clipboard after selections                                 | `paste_clipboard_after`                    |
 | `P`     | Paste system clipboard before selections                                | `paste_clipboard_before`                   |
 | `y`     | Join and yank selections to clipboard                                   | `yank_joined_to_clipboard`                 |

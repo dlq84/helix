@@ -1,12 +1,10 @@
 //! This module contains the functionality toggle comments on lines over the selection
 //! using the comment character defined in the user's `languages.toml`
 
-use once_cell::sync::Lazy;
-use regex::Regex;
+use smallvec::SmallVec;
 
 use crate::{
-    find_first_non_whitespace_char, selection, Change, Range, Rope, RopeSlice, Selection, Tendril,
-    Transaction,
+    find_first_non_whitespace_char, Change, Range, Rope, RopeSlice, Selection, Tendril, Transaction,
 };
 use std::borrow::Cow;
 
@@ -99,11 +97,10 @@ pub fn toggle_line_comments(doc: &Rope, selection: &Selection, token: Option<&st
 }
 
 fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
-    (0..text.len_chars()).rev().find(|&i| {
-        text.get_char(i)
-            .map(|ch| !ch.is_whitespace())
-            .unwrap_or(false)
-    })
+    text.chars_at(text.len_chars())
+        .reversed()
+        .position(|ch| !ch.is_whitespace())
+        .map(|pos| text.len_chars() - pos - 1)
 }
 
 #[derive(Debug, PartialEq)]
@@ -111,8 +108,8 @@ struct CommentChange {
     range: Range,
     open_pos: usize,
     close_pos: usize,
-    open_margin: usize,
-    close_margin: usize,
+    open_margin: bool,
+    close_margin: bool,
 }
 
 fn find_block_comments(
@@ -130,34 +127,21 @@ fn find_block_comments(
             find_last_non_whitespace_char(selection_slice),
         ) {
             let len = selection_slice.len_chars();
+            let open_len = open.chars().count();
+            let close_len = close.chars().count();
+            let after_open = open_pos + open_len;
+            let before_close = close_pos.saturating_sub(close_len);
 
-            // selection can be shorter than open_pos + open len
-            let open_fragment = Cow::from(
-                selection_slice.slice(open_pos..std::cmp::min(open_pos + open.len(), len)),
-            );
-            let close_fragment = Cow::from(
-                selection_slice
-                    .slice(close_pos - std::cmp::min(close.len() - 1, close_pos)..close_pos + 1),
-            );
+            let line_commented = if len >= after_open {
+                let open_fragment = selection_slice.slice(open_pos..open_pos + open_len);
+                let close_fragment = selection_slice.slice(before_close + 1..close_pos + 1);
 
-            // margin of one if there is a space between the comment token and other characters
-            let open_margin = match selection_slice.get_char(open_pos + open.len()) {
-                Some(c) if c == ' ' => 1,
-                _ => 0,
-            };
-
-            let close_margin = if open_pos + open.len()
-                != close_pos - std::cmp::min(close.len(), close_pos)
-            {
-                match selection_slice.get_char(close_pos - std::cmp::min(close.len(), close_pos)) {
-                    Some(c) if c == ' ' => 1,
-                    _ => 0,
-                }
+                open_fragment == open && close_fragment == close
             } else {
-                0
+                false
             };
 
-            if !(open_fragment == open && close_fragment == close) {
+            if !line_commented {
                 // as soon as one of the selections doesn't have a comment, only uncommented selections
                 // should be changed.
                 if commented {
@@ -167,8 +151,8 @@ fn find_block_comments(
                     range: *range,
                     open_pos,
                     close_pos,
-                    open_margin,
-                    close_margin,
+                    open_margin: false,
+                    close_margin: false,
                 });
                 commented = false;
             } else if commented {
@@ -176,8 +160,13 @@ fn find_block_comments(
                     range: *range,
                     open_pos,
                     close_pos,
-                    open_margin,
-                    close_margin,
+                    open_margin: selection_slice
+                        .get_char(after_open)
+                        .map_or(false, |c| c == ' '),
+                    close_margin: after_open != before_close
+                        && selection_slice
+                            .get_char(before_close)
+                            .map_or(false, |c| c == ' '),
                 });
             }
         }
@@ -215,11 +204,11 @@ pub fn toggle_block_comments(
         if commented {
             changes.push((
                 from + open_pos,
-                from + open_pos + open_token.len() + open_margin,
+                from + open_pos + open_token.len() + open_margin as usize,
                 None,
             ));
             changes.push((
-                from + close_pos - close_token.len() - close_margin + 1,
+                from + close_pos - close_token.len() - close_margin as usize + 1,
                 from + close_pos + 1,
                 None,
             ));
@@ -236,22 +225,17 @@ pub fn toggle_block_comments(
 }
 
 pub fn split_lines_of_selection(text: RopeSlice, selection: &Selection) -> Selection {
-    #[allow(clippy::trivial_regex)]
-    static REGEX: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"\r\n|[\n\r\u{000B}\u{000C}\u{0085}\u{2028}\u{2029}]").unwrap());
-
-    selection::split_on_matches(
-        text,
-        &selection.clone().transform(|range| {
-            // extend each line
-            let (start_line, end_line) = range.line_range(text.slice(..));
-            let start = text.line_to_char(start_line);
-            let end = text.line_to_char((end_line + 1).min(text.len_lines()));
-
-            Range::new(start, end).with_direction(range.direction())
-        }),
-        &REGEX,
-    )
+    let mut ranges = SmallVec::new();
+    for range in selection.ranges() {
+        let (line_start, line_end) = range.line_range(text.slice(..));
+        let mut pos = text.line_to_char(line_start);
+        for line in text.slice(pos..text.line_to_char(line_end + 1)).lines() {
+            let start = pos;
+            pos += line.len_chars();
+            ranges.push(Range::new(start, pos));
+        }
+    }
+    Selection::new(ranges, 0)
 }
 
 pub fn toggle_block_comments_as_line_fallback(
@@ -393,8 +377,8 @@ mod test {
                     range: Range::new(0, 5),
                     open_pos: 0,
                     close_pos: 4,
-                    open_margin: 0,
-                    close_margin: 0
+                    open_margin: false,
+                    close_margin: false
                 }]
             )
         );
