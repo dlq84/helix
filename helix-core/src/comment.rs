@@ -103,7 +103,7 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
         .map(|pos| text.len_chars() - pos - 1)
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct CommentChange {
     range: Range,
     open_pos: usize,
