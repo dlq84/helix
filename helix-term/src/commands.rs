@@ -4535,14 +4535,14 @@ pub fn completion(cx: &mut Context) {
 }
 
 // comments
-type CommentTypeFn = fn(
+type CommentTransactionFn = fn(
     token: Option<&str>,
     tokens: Option<(&str, &str)>,
-    text: RopeSlice,
+    doc: &Rope,
     selection: &Selection,
-) -> comment::CommentType;
+) -> Transaction;
 
-fn toggle_comments_impl(cx: &mut Context, comment_type: CommentTypeFn) {
+fn toggle_comments_impl(cx: &mut Context, comment_transaction: CommentTransactionFn) {
     let (view, doc) = current!(cx.editor);
     let token: Option<&str> = doc
         .language_config()
@@ -4553,42 +4553,70 @@ fn toggle_comments_impl(cx: &mut Context, comment_type: CommentTypeFn) {
         .and_then(|lc| lc.block_comment_tokens.as_ref())
         .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
 
-    let comment_type = comment_type(token, tokens, doc.text().slice(..), doc.selection(view.id));
-    let transaction = match comment_type {
-        comment::CommentType::Line => {
-            comment::toggle_line_comments(doc.text(), doc.selection(view.id), token)
-        }
-        comment::CommentType::Block => {
-            comment::toggle_block_comments(doc.text(), doc.selection(view.id), tokens)
-        }
-        comment::CommentType::BlockAsLineFallback => {
-            comment::toggle_block_comments_as_line_fallback(
-                doc.text(),
-                doc.selection(view.id),
-                tokens,
-            )
-        }
-    };
+    let transaction = comment_transaction(token, tokens, doc.text(), doc.selection(view.id));
 
     doc.apply(&transaction, view.id);
     exit_select_mode(cx);
 }
 
 fn toggle_comments(cx: &mut Context) {
-    toggle_comments_impl(cx, comment::comment_type)
+    toggle_comments_impl(cx, |token, tokens, doc, selection| {
+        let text = doc.slice(..);
+
+        // only have line comment tokens
+        if matches!((token, tokens), (Some(_), None)) {
+            return comment::toggle_line_comments(doc, selection, token);
+        }
+
+        let split_lines = comment::split_lines_of_selection(text, selection);
+        let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
+
+        let (block_commented, comment_changes) =
+            comment::find_block_comments(open_token, close_token, text, selection);
+        // check first if selection has block comments
+        if block_commented {
+            return comment::create_block_comment_transaction(
+                doc,
+                selection,
+                tokens,
+                block_commented,
+                comment_changes,
+            );
+        }
+
+        let (line_commented, line_comment_changes) =
+            comment::find_block_comments(open_token, close_token, text, &split_lines);
+        // either block commented by line or not commented and only have block comment tokens
+        if line_commented || matches!((token, tokens), (None, Some(_))) {
+            return comment::create_block_comment_transaction(
+                doc,
+                &split_lines,
+                tokens,
+                line_commented,
+                line_comment_changes,
+            );
+        }
+
+        // not block commented at all and don't have any tokens
+        comment::toggle_line_comments(doc, selection, token)
+    })
 }
 
 fn toggle_line_comments(cx: &mut Context) {
-    toggle_comments_impl(cx, |token, tokens, _, _| match (token, tokens) {
-        (None, Some(_)) => comment::CommentType::BlockAsLineFallback,
-        _ => comment::CommentType::Line,
+    toggle_comments_impl(cx, |token, tokens, doc, selection| match (token, tokens) {
+        (None, Some(_)) => comment::toggle_block_comments(
+            doc,
+            &comment::split_lines_of_selection(doc.slice(..), selection),
+            tokens,
+        ),
+        _ => comment::toggle_line_comments(doc, selection, token),
     });
 }
 
 fn toggle_block_comments(cx: &mut Context) {
-    toggle_comments_impl(cx, |token, tokens, _, _| match (token, tokens) {
-        (Some(_), None) => comment::CommentType::Line,
-        _ => comment::CommentType::Block,
+    toggle_comments_impl(cx, |token, tokens, doc, selection| match (token, tokens) {
+        (Some(_), None) => comment::toggle_line_comments(doc, selection, token),
+        _ => comment::toggle_block_comments(doc, selection, tokens),
     });
 }
 

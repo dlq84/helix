@@ -104,7 +104,7 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
 }
 
 #[derive(Debug, PartialEq)]
-struct CommentChange {
+pub struct CommentChange {
     range: Range,
     open_pos: usize,
     close_pos: usize,
@@ -112,7 +112,7 @@ struct CommentChange {
     close_margin: bool,
 }
 
-fn find_block_comments(
+pub fn find_block_comments(
     open: &str,
     close: &str,
     text: RopeSlice,
@@ -178,15 +178,14 @@ fn find_block_comments(
 }
 
 #[must_use]
-pub fn toggle_block_comments(
+pub fn create_block_comment_transaction(
     doc: &Rope,
     selection: &Selection,
     tokens: Option<(&str, &str)>,
+    commented: bool,
+    comment_changes: Vec<CommentChange>,
 ) -> Transaction {
     let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
-    let text = doc.slice(..);
-    let (commented, comment_changes) =
-        find_block_comments(open_token, close_token, text, selection);
     let open = Tendril::from(format!("{} ", open_token));
     let close = Tendril::from(format!(" {}", close_token));
     let mut changes: Vec<Change> = Vec::with_capacity(selection.len());
@@ -224,6 +223,19 @@ pub fn toggle_block_comments(
     Transaction::change(doc, changes.into_iter())
 }
 
+#[must_use]
+pub fn toggle_block_comments(
+    doc: &Rope,
+    selection: &Selection,
+    tokens: Option<(&str, &str)>,
+) -> Transaction {
+    let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
+    let text = doc.slice(..);
+    let (commented, comment_changes) =
+        find_block_comments(open_token, close_token, text, selection);
+    create_block_comment_transaction(doc, selection, tokens, commented, comment_changes)
+}
+
 pub fn split_lines_of_selection(text: RopeSlice, selection: &Selection) -> Selection {
     let mut ranges = SmallVec::new();
     for range in selection.ranges() {
@@ -236,70 +248,6 @@ pub fn split_lines_of_selection(text: RopeSlice, selection: &Selection) -> Selec
         }
     }
     Selection::new(ranges, 0)
-}
-
-pub fn toggle_block_comments_as_line_fallback(
-    text: &Rope,
-    selection: &Selection,
-    tokens: Option<(&str, &str)>,
-) -> Transaction {
-    toggle_block_comments(
-        text,
-        &split_lines_of_selection(text.slice(..), selection),
-        tokens,
-    )
-}
-
-pub enum CommentType {
-    Line,
-    Block,
-    BlockAsLineFallback,
-}
-
-/// Return what CommentType selection should be toggled with
-pub fn comment_type(
-    token: Option<&str>,
-    tokens: Option<(&str, &str)>,
-    text: RopeSlice,
-    selection: &Selection,
-) -> CommentType {
-    let mut lines: Vec<usize> = Vec::with_capacity(selection.len());
-    let mut min_next_line = 0;
-    for selection in selection {
-        let (start, end) = selection.line_range(text);
-        let start = start.max(min_next_line).min(text.len_lines());
-        let end = (end + 1).min(text.len_lines());
-
-        lines.extend(start..end);
-        min_next_line = end;
-    }
-    let split_lines = split_lines_of_selection(text, selection);
-    let (line_commented, block_commented) = match (token, tokens) {
-        (Some(_), Some(tokens)) => (
-            find_block_comments(tokens.0, tokens.1, text, &split_lines).0,
-            find_block_comments(tokens.0, tokens.1, text, selection).0,
-        ),
-        (None, None) => (
-            find_block_comments("/*", "*/", text, &split_lines).0,
-            find_block_comments("/*", "*/", text, selection).0,
-        ),
-        (Some(_), None) => return CommentType::Line,
-        (None, Some(tokens)) => (
-            find_block_comments(tokens.0, tokens.1, text, &split_lines).0,
-            find_block_comments(tokens.0, tokens.1, text, selection).0,
-        ),
-    };
-
-    if line_commented {
-        return CommentType::BlockAsLineFallback;
-    }
-    if block_commented {
-        return CommentType::Block;
-    }
-    match (token, tokens) {
-        (None, Some(_)) => CommentType::BlockAsLineFallback,
-        _ => CommentType::Line,
-    }
 }
 
 #[cfg(test)]
