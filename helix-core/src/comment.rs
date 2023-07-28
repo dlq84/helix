@@ -122,20 +122,17 @@ pub fn find_block_comments(
 ) -> (bool, Vec<CommentChange>) {
     let mut commented = true;
     let mut comment_changes = Vec::with_capacity(selection.len());
-    let mut start_token: Option<&str> = None;
-    let mut end_token: Option<&str> = None;
     let default_tokens = tokens.first().cloned().unwrap_or_default();
+    let mut start_token = default_tokens.start.clone();
+    let mut end_token = default_tokens.end.clone();
 
-    let mut tokens: Vec<(&str, &str)> = tokens
-        .iter()
-        .map(|token| (token.start.as_str(), token.end.as_str()))
-        .collect();
+    let mut tokens = tokens.clone();
     // sort the tokens by length, so longer tokens will match first
     tokens.sort_by(|a, b| {
-        if a.0.len() == b.0.len() {
-            b.1.len().cmp(&a.1.len())
+        if a.start.len() == b.start.len() {
+            b.end.len().cmp(&a.end.len())
         } else {
-            b.0.len().cmp(&a.0.len())
+            b.start.len().cmp(&a.start.len())
         }
     });
     for range in selection {
@@ -148,8 +145,7 @@ pub fn find_block_comments(
             let mut after_start = 0;
             let mut before_end = 0;
 
-            // checks if selection_slice is surrounded by start and end
-            let mut check_tokens = |start: &str, end: &str| {
+            for BlockCommentToken { start, end } in &tokens {
                 let len = (end_pos + 1) - start_pos;
                 let start_len = start.chars().count();
                 let end_len = end.chars().count();
@@ -160,19 +156,13 @@ pub fn find_block_comments(
                     let start_fragment = selection_slice.slice(start_pos..after_start);
                     let end_fragment = selection_slice.slice(before_end + 1..end_pos + 1);
 
-                    if start_fragment == start && end_fragment == end {
-                        return true;
+                    // block commented with these tokens
+                    if start_fragment == start.as_str() && end_fragment == end.as_str() {
+                        start_token = start.to_string();
+                        end_token = end.to_string();
+                        line_commented = true;
+                        break;
                     }
-                }
-                false
-            };
-
-            for (start, end) in &tokens {
-                if check_tokens(start, end) {
-                    start_token = Some(start);
-                    end_token = Some(end);
-                    line_commented = true;
-                    break;
                 }
             }
 
@@ -204,8 +194,8 @@ pub fn find_block_comments(
                         && selection_slice
                             .get_char(before_end)
                             .map_or(false, |c| c == ' '),
-                    start_token: start_token.unwrap().to_string(),
-                    end_token: end_token.unwrap().to_string(),
+                    start_token: start_token.to_string(),
+                    end_token: end_token.to_string(),
                 });
             }
         }
