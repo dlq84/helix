@@ -105,15 +105,26 @@ fn find_last_non_whitespace_char(text: RopeSlice) -> Option<usize> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct CommentChange {
-    range: Range,
-    start_pos: usize,
-    end_pos: usize,
-    start_margin: bool,
-    end_margin: bool,
-    start_token: String,
-    end_token: String,
-    commented: bool,
+pub enum CommentChange {
+    Commented {
+        range: Range,
+        start_pos: usize,
+        end_pos: usize,
+        start_margin: bool,
+        end_margin: bool,
+        start_token: String,
+        end_token: String,
+    },
+    Uncommented {
+        range: Range,
+        start_pos: usize,
+        end_pos: usize,
+        start_token: String,
+        end_token: String,
+    },
+    Whitespace {
+        range: Range,
+    },
 }
 
 pub fn find_block_comments(
@@ -122,6 +133,7 @@ pub fn find_block_comments(
     selection: &Selection,
 ) -> (bool, Vec<CommentChange>) {
     let mut commented = true;
+    let mut only_whitespace = true;
     let mut comment_changes = Vec::with_capacity(selection.len());
     let default_tokens = tokens.first().cloned().unwrap_or_default();
     let mut start_token = default_tokens.start.clone();
@@ -145,9 +157,9 @@ pub fn find_block_comments(
             let mut line_commented = false;
             let mut after_start = 0;
             let mut before_end = 0;
+            let len = (end_pos + 1) - start_pos;
 
             for BlockCommentToken { start, end } in &tokens {
-                let len = (end_pos + 1) - start_pos;
                 let start_len = start.chars().count();
                 let end_len = end.chars().count();
                 after_start = start_pos + start_len;
@@ -168,19 +180,16 @@ pub fn find_block_comments(
             }
 
             if !line_commented {
-                comment_changes.push(CommentChange {
+                comment_changes.push(CommentChange::Uncommented {
                     range: *range,
                     start_pos,
                     end_pos,
-                    start_margin: false,
-                    end_margin: false,
                     start_token: default_tokens.start.clone(),
                     end_token: default_tokens.end.clone(),
-                    commented: false,
                 });
                 commented = false;
             } else {
-                comment_changes.push(CommentChange {
+                comment_changes.push(CommentChange::Commented {
                     range: *range,
                     start_pos,
                     end_pos,
@@ -193,12 +202,14 @@ pub fn find_block_comments(
                             .map_or(false, |c| c == ' '),
                     start_token: start_token.to_string(),
                     end_token: end_token.to_string(),
-                    commented: true,
                 });
             }
+            only_whitespace = false;
+        } else {
+            comment_changes.push(CommentChange::Whitespace { range: *range });
         }
     }
-    if comment_changes.is_empty() {
+    if only_whitespace {
         commented = false;
     }
     (commented, comment_changes)
@@ -214,53 +225,62 @@ pub fn create_block_comment_transaction(
     let mut changes: Vec<Change> = Vec::with_capacity(selection.len() * 2);
     let mut ranges: SmallVec<[Range; 1]> = SmallVec::with_capacity(selection.len());
     let mut offs = 0;
-    for CommentChange {
-        range,
-        start_pos,
-        end_pos,
-        start_margin,
-        end_margin,
-        start_token,
-        end_token,
-        commented: range_commented,
-    } in comment_changes
-    {
-        let from = range.from();
-        if commented && range_commented {
-            changes.push((
-                from + start_pos,
-                from + start_pos + start_token.len() + start_margin as usize,
-                None,
-            ));
-            changes.push((
-                from + end_pos - end_token.len() - end_margin as usize + 1,
-                from + end_pos + 1,
-                None,
-            ));
-        }
-
-        // if commented we want to manually map ranges through changes
-        if !commented {
-            if !range_commented {
+    for change in comment_changes {
+        if commented {
+            if let CommentChange::Commented {
+                range,
+                start_pos,
+                end_pos,
+                start_token,
+                end_token,
+                start_margin,
+                end_margin,
+            } = change
+            {
+                let from = range.from();
                 changes.push((
                     from + start_pos,
-                    from + start_pos,
-                    Some(Tendril::from(format!("{} ", start_token))),
+                    from + start_pos + start_token.len() + start_margin as usize,
+                    None,
                 ));
                 changes.push((
+                    from + end_pos - end_token.len() - end_margin as usize + 1,
                     from + end_pos + 1,
-                    from + end_pos + 1,
-                    Some(Tendril::from(format!(" {}", end_token))),
+                    None,
                 ));
+            }
+        } else {
+            // uncommented so manually map ranges through changes
+            match change {
+                CommentChange::Uncommented {
+                    range,
+                    start_pos,
+                    end_pos,
+                    start_token,
+                    end_token,
+                } => {
+                    let from = range.from();
+                    changes.push((
+                        from + start_pos,
+                        from + start_pos,
+                        Some(Tendril::from(format!("{} ", start_token))),
+                    ));
+                    changes.push((
+                        from + end_pos + 1,
+                        from + end_pos + 1,
+                        Some(Tendril::from(format!(" {}", end_token))),
+                    ));
 
-                let offset = start_token.chars().count() + end_token.chars().count() + 2;
-                ranges.push(
-                    Range::new(from + offs, from + offs + end_pos + 1 + offset)
-                        .with_direction(range.direction()),
-                );
-                offs += offset;
-            } else {
-                ranges.push(Range::new(range.from() + offs, range.to() + offs));
+                    let offset = start_token.chars().count() + end_token.chars().count() + 2;
+                    ranges.push(
+                        Range::new(from + offs, from + offs + end_pos + 1 + offset)
+                            .with_direction(range.direction()),
+                    );
+                    offs += offset;
+                }
+                CommentChange::Commented { range, .. } | CommentChange::Whitespace { range } => {
+                    ranges.push(Range::new(range.from() + offs, range.to() + offs));
+                }
             }
         }
     }
@@ -368,15 +388,12 @@ mod test {
             res,
             (
                 false,
-                vec![CommentChange {
+                vec![CommentChange::Uncommented {
                     range: Range::new(0, 5),
                     start_pos: 0,
                     end_pos: 4,
-                    start_margin: false,
-                    end_margin: false,
                     start_token: "/*".to_string(),
                     end_token: "*/".to_string(),
-                    commented: false,
                 }]
             )
         );

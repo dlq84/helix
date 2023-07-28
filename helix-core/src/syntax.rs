@@ -102,6 +102,7 @@ pub struct LanguageConfiguration {
     #[serde(default)]
     pub shebangs: Vec<String>, // interpreter(s) associated with language
     pub roots: Vec<String>,        // these indicate project roots <.git, Cargo.toml>
+    #[serde(alias = "comment-token")]
     pub comment_tokens: Option<CommentTokens>,
     pub block_comment_tokens: Option<BlockCommentTokens>,
     pub text_width: Option<usize>,
