@@ -126,7 +126,7 @@ pub fn find_block_comments(
     let mut start_token = default_tokens.start.clone();
     let mut end_token = default_tokens.end.clone();
 
-    let mut tokens = tokens.clone();
+    let mut tokens = tokens;
     // sort the tokens by length, so longer tokens will match first
     tokens.sort_by(|a, b| {
         if a.start.len() == b.start.len() {
