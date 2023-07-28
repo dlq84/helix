@@ -23,7 +23,7 @@ use helix_core::{
     regex::{self, Regex, RegexBuilder},
     search::{self, CharMatcher},
     selection, shellwords, surround,
-    syntax::LanguageServerFeature,
+    syntax::{BlockCommentToken, BlockCommentTokens, CommentTokens, LanguageServerFeature},
     text_annotations::TextAnnotations,
     textobject,
     tree_sitter::Node,
@@ -4537,7 +4537,7 @@ pub fn completion(cx: &mut Context) {
 // comments
 type CommentTransactionFn = fn(
     token: Option<&str>,
-    tokens: Option<(&str, &str)>,
+    tokens: Option<Vec<BlockCommentToken>>,
     doc: &Rope,
     selection: &Selection,
 ) -> Transaction;
@@ -4546,12 +4546,18 @@ fn toggle_comments_impl(cx: &mut Context, comment_transaction: CommentTransactio
     let (view, doc) = current!(cx.editor);
     let token: Option<&str> = doc
         .language_config()
-        .and_then(|lc| lc.comment_token.as_ref())
-        .map(|tc| tc.as_ref());
-    let tokens: Option<(&str, &str)> = doc
+        .and_then(|lc| lc.comment_tokens.as_ref())
+        .map(|tc| match tc {
+            CommentTokens::Single(token) => token.as_str(),
+            CommentTokens::Mutliple(tokens) => tokens.first().unwrap(),
+        });
+    let tokens: Option<Vec<BlockCommentToken>> = doc
         .language_config()
         .and_then(|lc| lc.block_comment_tokens.as_ref())
-        .map(|tc| (tc.0.as_ref(), tc.1.as_ref()));
+        .map(|tc| match tc {
+            BlockCommentTokens::Single(token) => vec![token.clone()],
+            BlockCommentTokens::Mutliple(tokens) => tokens.clone(),
+        });
 
     let transaction = comment_transaction(token, tokens, doc.text(), doc.selection(view.id));
 
@@ -4564,34 +4570,53 @@ fn toggle_comments(cx: &mut Context) {
         let text = doc.slice(..);
 
         // only have line comment tokens
-        if matches!((token, tokens), (Some(_), None)) {
+        if matches!((token, tokens.clone()), (Some(_), None)) {
             return comment::toggle_line_comments(doc, selection, token);
         }
 
         let split_lines = comment::split_lines_of_selection(text, selection);
-        let (open_token, close_token) = tokens.unwrap_or(("/*", "*/"));
 
-        let (block_commented, comment_changes) =
-            comment::find_block_comments(open_token, close_token, text, selection);
-        // check first if selection has block comments
+        let (line_commented, line_comment_changes) = comment::find_block_comments(
+            tokens
+                .clone()
+                .unwrap_or_else(|| vec![BlockCommentToken::default()]),
+            text,
+            &split_lines,
+        );
+
+        // block commented by line would also be block commented so check this first
+        if line_commented {
+            return comment::create_block_comment_transaction(
+                doc,
+                &split_lines,
+                line_commented,
+                line_comment_changes,
+            );
+        }
+
+        let (block_commented, comment_changes) = comment::find_block_comments(
+            tokens
+                .clone()
+                .unwrap_or_else(|| vec![BlockCommentToken::default()]),
+            text,
+            selection,
+        );
+
+        // check if selection has block comments
         if block_commented {
             return comment::create_block_comment_transaction(
                 doc,
                 selection,
-                tokens,
                 block_commented,
                 comment_changes,
             );
         }
 
-        let (line_commented, line_comment_changes) =
-            comment::find_block_comments(open_token, close_token, text, &split_lines);
-        // either block commented by line or not commented and only have block comment tokens
-        if line_commented || matches!((token, tokens), (None, Some(_))) {
+        // not commented and only have block comment tokens
+        if matches!((token, tokens), (None, Some(_))) {
             return comment::create_block_comment_transaction(
                 doc,
                 &split_lines,
-                tokens,
                 line_commented,
                 line_comment_changes,
             );
@@ -4603,20 +4628,28 @@ fn toggle_comments(cx: &mut Context) {
 }
 
 fn toggle_line_comments(cx: &mut Context) {
-    toggle_comments_impl(cx, |token, tokens, doc, selection| match (token, tokens) {
-        (None, Some(_)) => comment::toggle_block_comments(
-            doc,
-            &comment::split_lines_of_selection(doc.slice(..), selection),
-            tokens,
-        ),
-        _ => comment::toggle_line_comments(doc, selection, token),
+    toggle_comments_impl(cx, |token, tokens, doc, selection| {
+        match (token, tokens.clone()) {
+            (None, Some(_)) => comment::toggle_block_comments(
+                doc,
+                &comment::split_lines_of_selection(doc.slice(..), selection),
+                tokens.unwrap_or_else(|| vec![BlockCommentToken::default()]),
+            ),
+            _ => comment::toggle_line_comments(doc, selection, token),
+        }
     });
 }
 
 fn toggle_block_comments(cx: &mut Context) {
-    toggle_comments_impl(cx, |token, tokens, doc, selection| match (token, tokens) {
-        (Some(_), None) => comment::toggle_line_comments(doc, selection, token),
-        _ => comment::toggle_block_comments(doc, selection, tokens),
+    toggle_comments_impl(cx, |token, tokens, doc, selection| {
+        match (token, tokens.clone()) {
+            (Some(_), None) => comment::toggle_line_comments(doc, selection, token),
+            _ => comment::toggle_block_comments(
+                doc,
+                selection,
+                tokens.unwrap_or_else(|| vec![BlockCommentToken::default()]),
+            ),
+        }
     });
 }
 

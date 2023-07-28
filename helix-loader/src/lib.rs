@@ -317,8 +317,8 @@ mod merge_toml_tests {
         // We added a new keys, so check them
         assert_eq!(nix.get("test").unwrap().as_str().unwrap(), "bbb");
         assert_eq!(nix_indent.get("test").unwrap().as_str().unwrap(), "aaa");
-        // We didn't change comment-token so it should be same
-        assert_eq!(nix.get("comment-token").unwrap().as_str().unwrap(), "#");
+        // We didn't change comment-tokens so it should be same
+        assert_eq!(nix.get("comment-tokens").unwrap().as_str().unwrap(), "#");
     }
 
     #[test]

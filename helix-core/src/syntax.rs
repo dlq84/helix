@@ -102,8 +102,8 @@ pub struct LanguageConfiguration {
     #[serde(default)]
     pub shebangs: Vec<String>, // interpreter(s) associated with language
     pub roots: Vec<String>,        // these indicate project roots <.git, Cargo.toml>
-    pub comment_token: Option<String>,
-    pub block_comment_tokens: Option<(String, String)>,
+    pub comment_tokens: Option<CommentTokens>,
+    pub block_comment_tokens: Option<BlockCommentTokens>,
     pub text_width: Option<usize>,
     pub soft_wrap: Option<SoftWrap>,
 
@@ -229,6 +229,35 @@ impl<'de> Deserialize<'de> for FileType {
         }
 
         deserializer.deserialize_any(FileTypeVisitor)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
+pub enum CommentTokens {
+    Mutliple(Vec<String>),
+    Single(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
+pub enum BlockCommentTokens {
+    Mutliple(Vec<BlockCommentToken>),
+    Single(BlockCommentToken),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BlockCommentToken {
+    pub start: String,
+    pub end: String,
+}
+
+impl Default for BlockCommentToken {
+    fn default() -> Self {
+        BlockCommentToken {
+            start: "/*".to_string(),
+            end: "*/".to_string(),
+        }
     }
 }
 
