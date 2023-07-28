@@ -113,6 +113,7 @@ pub struct CommentChange {
     end_margin: bool,
     start_token: String,
     end_token: String,
+    commented: bool,
 }
 
 pub fn find_block_comments(
@@ -167,11 +168,6 @@ pub fn find_block_comments(
             }
 
             if !line_commented {
-                // as soon as one of the selections doesn't have a comment, only uncommented selections
-                // should be changed.
-                if commented {
-                    comment_changes.clear();
-                }
                 comment_changes.push(CommentChange {
                     range: *range,
                     start_pos,
@@ -180,9 +176,10 @@ pub fn find_block_comments(
                     end_margin: false,
                     start_token: default_tokens.start.clone(),
                     end_token: default_tokens.end.clone(),
+                    commented: false,
                 });
                 commented = false;
-            } else if commented {
+            } else {
                 comment_changes.push(CommentChange {
                     range: *range,
                     start_pos,
@@ -196,6 +193,7 @@ pub fn find_block_comments(
                             .map_or(false, |c| c == ' '),
                     start_token: start_token.to_string(),
                     end_token: end_token.to_string(),
+                    commented: true,
                 });
             }
         }
@@ -212,8 +210,10 @@ pub fn create_block_comment_transaction(
     selection: &Selection,
     commented: bool,
     comment_changes: Vec<CommentChange>,
-) -> Transaction {
-    let mut changes: Vec<Change> = Vec::with_capacity(selection.len());
+) -> (Transaction, SmallVec<[Range; 1]>) {
+    let mut changes: Vec<Change> = Vec::with_capacity(selection.len() * 2);
+    let mut ranges: SmallVec<[Range; 1]> = SmallVec::with_capacity(selection.len());
+    let mut offs = 0;
     for CommentChange {
         range,
         start_pos,
@@ -222,12 +222,11 @@ pub fn create_block_comment_transaction(
         end_margin,
         start_token,
         end_token,
+        commented: range_commented,
     } in comment_changes
     {
-        let from = range
-            .with_direction(crate::movement::Direction::Forward)
-            .from();
-        if commented {
+        let from = range.from();
+        if commented && range_commented {
             changes.push((
                 from + start_pos,
                 from + start_pos + start_token.len() + start_margin as usize,
@@ -238,20 +237,34 @@ pub fn create_block_comment_transaction(
                 from + end_pos + 1,
                 None,
             ));
-        } else {
-            changes.push((
-                from + start_pos,
-                from + start_pos,
-                Some(Tendril::from(format!("{} ", start_token))),
-            ));
-            changes.push((
-                from + end_pos + 1,
-                from + end_pos + 1,
-                Some(Tendril::from(format!(" {}", end_token))),
-            ));
+        }
+
+        // if commented we want to manually map ranges through changes
+        if !commented {
+            if !range_commented {
+                changes.push((
+                    from + start_pos,
+                    from + start_pos,
+                    Some(Tendril::from(format!("{} ", start_token))),
+                ));
+                changes.push((
+                    from + end_pos + 1,
+                    from + end_pos + 1,
+                    Some(Tendril::from(format!(" {}", end_token))),
+                ));
+
+                let offset = start_token.chars().count() + end_token.chars().count() + 2;
+                ranges.push(
+                    Range::new(from + offs, from + offs + end_pos + 1 + offset)
+                        .with_direction(range.direction()),
+                );
+                offs += offset;
+            } else {
+                ranges.push(Range::new(range.from() + offs, range.to() + offs));
+            }
         }
     }
-    Transaction::change(doc, changes.into_iter())
+    (Transaction::change(doc, changes.into_iter()), ranges)
 }
 
 #[must_use]
@@ -262,7 +275,12 @@ pub fn toggle_block_comments(
 ) -> Transaction {
     let text = doc.slice(..);
     let (commented, comment_changes) = find_block_comments(tokens, text, selection);
-    create_block_comment_transaction(doc, selection, commented, comment_changes)
+    let (mut transaction, ranges) =
+        create_block_comment_transaction(doc, selection, commented, comment_changes);
+    if !commented {
+        transaction = transaction.with_selection(Selection::new(ranges, selection.primary_index()));
+    }
+    transaction
 }
 
 pub fn split_lines_of_selection(text: RopeSlice, selection: &Selection) -> Selection {
@@ -357,7 +375,8 @@ mod test {
                     start_margin: false,
                     end_margin: false,
                     start_token: "/*".to_string(),
-                    end_token: "*/".to_string()
+                    end_token: "*/".to_string(),
+                    commented: false,
                 }]
             )
         );

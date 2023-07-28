@@ -4591,7 +4591,8 @@ fn toggle_comments(cx: &mut Context) {
                 &split_lines,
                 line_commented,
                 line_comment_changes,
-            );
+            )
+            .0;
         }
 
         let (block_commented, comment_changes) = comment::find_block_comments(
@@ -4609,7 +4610,8 @@ fn toggle_comments(cx: &mut Context) {
                 selection,
                 block_commented,
                 comment_changes,
-            );
+            )
+            .0;
         }
 
         // not commented and only have block comment tokens
@@ -4619,7 +4621,8 @@ fn toggle_comments(cx: &mut Context) {
                 &split_lines,
                 line_commented,
                 line_comment_changes,
-            );
+            )
+            .0;
         }
 
         // not block commented at all and don't have any tokens
