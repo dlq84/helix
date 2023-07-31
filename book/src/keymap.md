@@ -305,8 +305,8 @@ This layer is a kludge of mappings, mostly pickers.
 
 Comment out code.
 
-| Key     | Description                          | Command               |
-| -----   | -----------                          | -------               |
+| Key     | Description                        | Command                 |
+| -----   | -----------                        | -------                 |
 | `c`     | Comment/uncomment selections       | `toggle_comments`       |
 | `l`     | Line comment/uncomment selections  | `toggle_line_comments`  |
 | `b`     | Block comment/uncomment selections | `toggle_block_comments` |
