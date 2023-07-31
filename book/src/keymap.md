@@ -307,9 +307,9 @@ Comment out code.
 
 | Key     | Description                          | Command               |
 | -----   | -----------                          | -------               |
-| `c`     | "Comment/uncomment selections"       | toggle_comments       |
-| `l`     | "Line comment/uncomment selections"  | toggle_line_comments  |
-| `b`     | "Block comment/uncomment selections" | toggle_block_comments |
+| `c`     | Comment/uncomment selections       | `toggle_comments`       |
+| `l`     | Line comment/uncomment selections  | `toggle_line_comments`  |
+| `b`     | Block comment/uncomment selections | `toggle_block_comments` |
 
 ##### Popup
 
