@@ -4,7 +4,7 @@ name = "rust"
 scope = "source.rust"
 injection-regex = "rust"
 file-types = ["rs"]
-comment-tokens = "//"
+comment-token = "//"
 roots = ["Cargo.toml", "Cargo.lock"]
 indent = { tab-width = 4, unit = "    " }
 
