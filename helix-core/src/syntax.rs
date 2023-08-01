@@ -102,9 +102,19 @@ pub struct LanguageConfiguration {
     #[serde(default)]
     pub shebangs: Vec<String>, // interpreter(s) associated with language
     pub roots: Vec<String>,        // these indicate project roots <.git, Cargo.toml>
-    #[serde(alias = "comment-token")]
-    pub comment_tokens: Option<CommentTokens>,
-    pub block_comment_tokens: Option<BlockCommentTokens>,
+    #[serde(
+        default,
+        skip_serializing,
+        deserialize_with = "from_comment_tokens",
+        alias = "comment-token"
+    )]
+    pub comment_tokens: Option<Vec<String>>,
+    #[serde(
+        default,
+        skip_serializing,
+        deserialize_with = "from_block_comment_tokens"
+    )]
+    pub block_comment_tokens: Option<Vec<BlockCommentToken>>,
     pub text_width: Option<usize>,
     pub soft_wrap: Option<SoftWrap>,
 
@@ -233,18 +243,22 @@ impl<'de> Deserialize<'de> for FileType {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
-pub enum CommentTokens {
-    Mutliple(Vec<String>),
-    Single(String),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
-pub enum BlockCommentTokens {
-    Mutliple(Vec<BlockCommentToken>),
-    Single(BlockCommentToken),
+fn from_comment_tokens<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum CommentTokens {
+        Multiple(Vec<String>),
+        Single(String),
+    }
+    Ok(
+        Option::<CommentTokens>::deserialize(deserializer)?.map(|tokens| match tokens {
+            CommentTokens::Single(val) => vec![val],
+            CommentTokens::Multiple(vals) => vals,
+        }),
+    )
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -260,6 +274,26 @@ impl Default for BlockCommentToken {
             end: "*/".to_string(),
         }
     }
+}
+
+fn from_block_comment_tokens<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<BlockCommentToken>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BlockCommentTokens {
+        Multiple(Vec<BlockCommentToken>),
+        Single(BlockCommentToken),
+    }
+    Ok(
+        Option::<BlockCommentTokens>::deserialize(deserializer)?.map(|tokens| match tokens {
+            BlockCommentTokens::Single(val) => vec![val],
+            BlockCommentTokens::Multiple(vals) => vals,
+        }),
+    )
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]

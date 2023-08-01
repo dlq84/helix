@@ -23,7 +23,7 @@ use helix_core::{
     regex::{self, Regex, RegexBuilder},
     search::{self, CharMatcher},
     selection, shellwords, surround,
-    syntax::{BlockCommentToken, BlockCommentTokens, CommentTokens, LanguageServerFeature},
+    syntax::{BlockCommentToken, LanguageServerFeature},
     text_annotations::TextAnnotations,
     textobject,
     tree_sitter::Node,
@@ -4547,17 +4547,12 @@ fn toggle_comments_impl(cx: &mut Context, comment_transaction: CommentTransactio
     let token: Option<&str> = doc
         .language_config()
         .and_then(|lc| lc.comment_tokens.as_ref())
-        .map(|tc| match tc {
-            CommentTokens::Single(token) => token.as_str(),
-            CommentTokens::Mutliple(tokens) => tokens.first().unwrap(),
-        });
+        .map(|tc| tc.first())
+        .unwrap_or(None)
+        .map(|tc| tc.as_str());
     let tokens: Option<Vec<BlockCommentToken>> = doc
         .language_config()
-        .and_then(|lc| lc.block_comment_tokens.as_ref())
-        .map(|tc| match tc {
-            BlockCommentTokens::Single(token) => vec![token.clone()],
-            BlockCommentTokens::Mutliple(tokens) => tokens.clone(),
-        });
+        .and_then(|lc| lc.block_comment_tokens.as_ref().cloned());
 
     let transaction = comment_transaction(token, tokens, doc.text(), doc.selection(view.id));
 
