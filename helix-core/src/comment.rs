@@ -128,7 +128,7 @@ pub enum CommentChange {
 }
 
 pub fn find_block_comments(
-    tokens: Vec<BlockCommentToken>,
+    tokens: &[BlockCommentToken],
     text: RopeSlice,
     selection: &Selection,
 ) -> (bool, Vec<CommentChange>) {
@@ -139,7 +139,7 @@ pub fn find_block_comments(
     let mut start_token = default_tokens.start.clone();
     let mut end_token = default_tokens.end.clone();
 
-    let mut tokens = tokens;
+    let mut tokens = tokens.to_vec();
     // sort the tokens by length, so longer tokens will match first
     tokens.sort_by(|a, b| {
         if a.start.len() == b.start.len() {
@@ -291,7 +291,7 @@ pub fn create_block_comment_transaction(
 pub fn toggle_block_comments(
     doc: &Rope,
     selection: &Selection,
-    tokens: Vec<BlockCommentToken>,
+    tokens: &[BlockCommentToken],
 ) -> Transaction {
     let text = doc.slice(..);
     let (commented, comment_changes) = find_block_comments(tokens, text, selection);
@@ -382,7 +382,7 @@ mod test {
 
         let text = doc.slice(..);
 
-        let res = find_block_comments(vec![BlockCommentToken::default()], text, &selection);
+        let res = find_block_comments(&[BlockCommentToken::default()], text, &selection);
 
         assert_eq!(
             res,
@@ -399,24 +399,21 @@ mod test {
         );
 
         // comment
-        let transaction =
-            toggle_block_comments(&doc, &selection, vec![BlockCommentToken::default()]);
+        let transaction = toggle_block_comments(&doc, &selection, &[BlockCommentToken::default()]);
         transaction.apply(&mut doc);
 
         assert_eq!(doc, "/* 1\n2\n3 */");
 
         // uncomment
         let selection = Selection::single(0, doc.len_chars());
-        let transaction =
-            toggle_block_comments(&doc, &selection, vec![BlockCommentToken::default()]);
+        let transaction = toggle_block_comments(&doc, &selection, &[BlockCommentToken::default()]);
         transaction.apply(&mut doc);
         assert_eq!(doc, "1\n2\n3");
 
         // don't panic when there is just a space in comment
         doc = Rope::from("/* */");
         let selection = Selection::single(0, doc.len_chars());
-        let transaction =
-            toggle_block_comments(&doc, &selection, vec![BlockCommentToken::default()]);
+        let transaction = toggle_block_comments(&doc, &selection, &[BlockCommentToken::default()]);
         transaction.apply(&mut doc);
         assert_eq!(doc, "");
     }
