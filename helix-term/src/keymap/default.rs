@@ -282,6 +282,7 @@ pub fn default() -> HashMap<Mode, KeyTrie> {
                 "b" => toggle_block_comments,
             },
             "?" => command_palette,
+            "e" => reveal_current_file,
         },
         "z" => { "View"
             "z" | "c" => align_view_center,
