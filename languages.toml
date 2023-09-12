@@ -601,7 +601,7 @@ scope = "source.ts"
 injection-regex = "(ts|typescript)"
 file-types = ["ts", "mts", "cts"]
 language-id = "typescript"
-shebangs = []
+shebangs = ["deno", "ts-node"]
 roots = []
 comment-token = "//"
 block-comment-tokens = { start = "/*", end = "*/" }
@@ -845,6 +845,7 @@ name = "julia"
 scope = "source.julia"
 injection-regex = "julia"
 file-types = ["jl"]
+shebangs = ["julia"]
 roots = ["Manifest.toml", "Project.toml"]
 comment-token = "#"
 block-comment-tokens = { start = "#=", end = "=#" }
@@ -859,7 +860,7 @@ source = { git = "https://github.com/tree-sitter/tree-sitter-julia", rev = "8fb3
 name = "java"
 scope = "source.java"
 injection-regex = "java"
-file-types = ["java"]
+file-types = ["java", "jav"]
 roots = ["pom.xml", "build.gradle", "build.gradle.kts"]
 language-servers = [ "jdtls" ]
 indent = { tab-width = 2, unit = "  " }
@@ -899,7 +900,7 @@ name = "ocaml"
 scope = "source.ocaml"
 injection-regex = "ocaml"
 file-types = ["ml"]
-shebangs = []
+shebangs = ["ocaml", "ocamlrun", "ocamlscript"]
 roots = []
 block-comment-tokens = { start = "(*", end = "*)" }
 comment-token = "(**)"
@@ -1153,7 +1154,7 @@ indent = { tab-width = 2, unit = "  " }
 
 [[grammar]]
 name = "perl"
-source = { git = "https://github.com/tree-sitter-perl/tree-sitter-perl", rev = "ed21ecbcc128a6688770ebafd3ef68a1c9bc1ea9" }
+source = { git = "https://github.com/tree-sitter-perl/tree-sitter-perl", rev = "9f3166800d40267fa68ed8273e96baf74f390517" }
 
 [[language]]
 name = "pod"
@@ -1420,7 +1421,7 @@ source = { git = "https://github.com/mtoohey31/tree-sitter-gitattributes", rev =
 name = "git-ignore"
 scope = "source.gitignore"
 roots = []
-file-types = [".gitignore", ".gitignore_global"]
+file-types = [".gitignore", ".gitignore_global", ".ignore", ".prettierignore", ".eslintignore", ".npmignore", "CODEOWNERS"]
 injection-regex = "git-ignore"
 comment-token = "#"
 grammar = "gitignore"
@@ -1884,6 +1885,7 @@ name = "scheme"
 scope = "source.scheme"
 injection-regex = "scheme"
 file-types = ["ss", "scm"]
+shebangs = ["scheme", "guile", "chicken"]
 roots = []
 comment-token = ";"
 indent = { tab-width = 2, unit = "  " }
@@ -2275,7 +2277,7 @@ source = { git = "https://github.com/Unoqwy/tree-sitter-kdl", rev = "e1cd292c6d1
 name = "xml"
 scope = "source.xml"
 injection-regex = "xml"
-file-types = ["xml", "mobileconfig", "plist", "xib", "storyboard", "svg", "xsd", "gml", "xaml", "gir"]
+file-types = ["xml", "mobileconfig", "plist", "xib", "storyboard", "svg", "xsd", "gml", "xaml", "gir", "rss", "atom", "opml"]
 block-comment-tokens = { start = "<!--", end = "-->" }
 indent = { tab-width = 2, unit = "  " }
 roots = []
